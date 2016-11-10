@@ -1222,6 +1222,15 @@ namespace crimson {
 	return result;
       } // pull_request
 
+      friend std::ostream& operator<<(std::ostream& out,
+				      const PullPriorityQueue& q) {
+	for (auto& c : q.client_map) {
+	  out << "{ client:" << c.first << ", record:" << c->second <<
+	    " }" << std::endl;
+	}
+	const auto& r = q.resv_heap.top();
+	return out;
+      }
 
     protected:
 
