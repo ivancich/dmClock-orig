@@ -134,6 +134,9 @@ namespace crimson {
 	, arrival(time)
 #endif
       {
+#if 1 // make sure there is no cost until we decide how best to handle
+	assert(cost == 0.0);
+#endif
 	assert(reservation < max_tag || proportion < max_tag);
       }
 
