@@ -51,6 +51,13 @@
 
 #include "gtest/gtest_prod.h"
 
+#define DEBUG 0
+
+#if DEBUG
+#include <iostream>
+#include <sstream>
+#endif
+
 
 namespace crimson {
 
@@ -135,9 +142,16 @@ namespace crimson {
 #endif
       {
 #if 1 // make sure there is no cost until we decide how best to handle
-	assert(cost == 0.0);
+	assert(0.0 == cost);
 #endif
 	assert(reservation < max_tag || proportion < max_tag);
+#if DEBUG
+	std::cout << "[ client:" << client <<
+	  " res:" << display_change(prev_tag.reservation, reservation) <<
+	  " wgt:" << display_change(prev_tag.proportion, proportion) <<
+	  " lim:" << display_change(prev_tag.limit, limit) <<
+	  " ]" << std::endl;
+#endif
       }
 
       RequestTag(double _res, double _prop, double _lim, const Time& _arrival) :
@@ -165,6 +179,16 @@ namespace crimson {
       }
 
     private:
+
+      static std::string display_change(double before, double after) {
+	if (before == after) {
+	  return std::string("same");
+	} else {
+	  std::stringstream ss;
+	  ss << before << "=>" << after;
+	  return ss.str();
+	}
+      }
 
       static double tag_calc(const Time& time,
 			     double prev,
