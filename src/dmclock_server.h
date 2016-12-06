@@ -51,7 +51,7 @@
 
 #include "gtest/gtest_prod.h"
 
-#define DEBUG 0
+#define DEBUG 1
 
 #if DEBUG
 #include <iostream>
@@ -101,11 +101,11 @@ namespace crimson {
 				      const ClientInfo& client) {
 	out <<
 	  "{ ClientInfo:: r:" << client.reservation <<
-	  " w:" << client.weight <<
-	  " l:" << client.limit <<
-	  " 1/r:" << client.reservation_inv <<
-	  " 1/w:" << client.weight_inv <<
-	  " 1/l:" << client.limit_inv <<
+	  " w:" << std::fixed << client.weight <<
+	  " l:" << std::fixed << client.limit <<
+	  " 1/r:" << std::fixed << client.reservation_inv <<
+	  " 1/w:" << std::fixed << client.weight_inv <<
+	  " 1/l:" << std::fixed << client.limit_inv <<
 	  " }";
 	return out;
       }
@@ -151,10 +151,10 @@ namespace crimson {
 #endif
 	assert(reservation < max_tag || proportion < max_tag);
 #if DEBUG
-	std::cout << "[ client:" << client <<
-	  " res:" << display_change(prev_tag.reservation, reservation) <<
-	  " wgt:" << display_change(prev_tag.proportion, proportion) <<
-	  " lim:" << display_change(prev_tag.limit, limit) <<
+	std::cout << "[ IN client:" << client <<
+	  " res:" << format_tag(reservation) <<
+	  " wgt:" << format_tag(proportion) <<
+	  " lim:" << format_tag(limit) <<
 	  " ]" << std::endl;
 #endif
       }
@@ -183,17 +183,27 @@ namespace crimson {
 	// empty
       }
 
-    private:
-
-      static std::string display_change(double before, double after) {
+      static std::string format_tag_change(double before, double after) {
 	if (before == after) {
 	  return std::string("same");
 	} else {
 	  std::stringstream ss;
-	  ss << before << "=>" << after;
+	  ss << format_tag(before) << "=>" << format_tag(after);
 	  return ss.str();
 	}
       }
+
+      static std::string format_tag(double value) {
+	if (max_tag == value) {
+	  return std::string("max");
+	} else if (min_tag == value) {
+	  return std::string("min");
+	} else {
+	  return format_time(value, tag_modulo);
+	}
+      }
+
+    private:
 
       static double tag_calc(const Time& time,
 			     double prev,
@@ -208,12 +218,6 @@ namespace crimson {
 	  }
 	  return std::max(time, prev + increment);
 	}
-      }
-
-      static std::string format_tag(double value) {
-	if (max_tag == value) return std::string("max");
-	else if (min_tag == value) return std::string("min");
-	else return format_time(value);
       }
 
       friend std::ostream& operator<<(std::ostream& out,
@@ -867,6 +871,14 @@ namespace crimson {
 	ClientRec& top = heap.top();
 	ClientReq& first = top.next_request();
 	RequestRef request = std::move(first.request);
+
+#if DEBUG
+	std::cout << "[ OUT client:" << top.info <<
+	  " res:" << RequestTag::format_tag(first.tag.reservation) <<
+	  " wgt:" << RequestTag::format_tag(first.tag.proportion) <<
+	  " lim:" << RequestTag::format_tag(first.tag.limit) <<
+	  " ]" << std::endl;
+#endif
 
 	// pop request and adjust heaps
 	top.pop_request();
