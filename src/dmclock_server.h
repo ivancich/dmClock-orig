@@ -52,6 +52,7 @@
 #include "gtest/gtest_prod.h"
 
 #define DEBUG 1
+#define ATOMIC_REQ_COUNT 1
 
 #if DEBUG
 #include <iostream>
@@ -702,6 +703,10 @@ namespace crimson {
 
       std::atomic_bool finishing;
 
+#if ATOMIC_REQ_COUNT
+      std::atomic<std::uint16_t> req_count;
+#endif
+
       // every request creates a tick
       Counter tick = 0;
 
@@ -731,6 +736,9 @@ namespace crimson {
 	client_info_f(_client_info_f),
 	allow_limit_break(_allow_limit_break),
 	finishing(false),
+#if ATOMIC_REQ_COUNT
+	req_count(0),
+#endif
 	idle_age(std::chrono::duration_cast<Duration>(_idle_age)),
 	erase_age(std::chrono::duration_cast<Duration>(_erase_age)),
 	check_time(std::chrono::duration_cast<Duration>(_check_time))
@@ -858,6 +866,12 @@ namespace crimson {
 #if USE_PROP_HEAP
 	prop_heap.adjust(client);
 #endif
+#if ATOMIC_REQ_COUNT
+	++req_count;
+#if DEBUG
+	std::cout << "[ IN queue_len:" << req_count << "]" << std::endl;
+#endif
+#endif
       } // add_request
 
 
@@ -872,16 +886,24 @@ namespace crimson {
 	ClientReq& first = top.next_request();
 	RequestRef request = std::move(first.request);
 
+	// pop request and adjust heaps
+	top.pop_request();
+
+#if ATOMIC_REQ_COUNT
+	--req_count;
+#endif
+
 #if DEBUG
 	std::cout << "[ OUT client:" << top.info <<
 	  " res:" << RequestTag::format_tag(first.tag.reservation) <<
 	  " wgt:" << RequestTag::format_tag(first.tag.proportion) <<
 	  " lim:" << RequestTag::format_tag(first.tag.limit) <<
 	  " ]" << std::endl;
+#if ATOMIC_REQ_COUNT
+	std::cout << "[ OUT queue_len:" << req_count << "]" << std::endl;
+#endif
 #endif
 
-	// pop request and adjust heaps
-	top.pop_request();
 
 #ifndef DO_NOT_DELAY_TAG_CALC
 	if (top.has_request()) {
