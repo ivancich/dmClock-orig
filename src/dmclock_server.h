@@ -59,6 +59,12 @@
 #include <sstream>
 #endif
 
+#define CLOBBER_CHECK 1
+
+#ifdef CLOBBER_CHECK
+#warning clobber check turned on
+#endif
+
 #define CHECK 1
 
 #ifdef CHECK
@@ -304,11 +310,26 @@ namespace crimson {
 	// an idle client becoming unidle
 	double                prop_delta = 0.0;
 
+#ifdef CLOBBER_CHECK
+	char buff1[4] = { '\x0aa', '\x0aa', '\x0aa', '\x0aa' };
+#endif
 	c::IndIntruHeapData   reserv_heap_data;
+#ifdef CLOBBER_CHECK
+	char buff2[4] = { '\x0aa', '\x0aa', '\x0aa', '\x0aa' };
+#endif
 	c::IndIntruHeapData   lim_heap_data;
+#ifdef CLOBBER_CHECK
+	char buff3[4] = { '\x0aa', '\x0aa', '\x0aa', '\x0aa' };
+#endif
 	c::IndIntruHeapData   ready_heap_data;
 #if USE_PROP_HEAP
+#ifdef CLOBBER_CHECK
+	char buff4[4] = { '\x0aa', '\x0aa', '\x0aa', '\x0aa' };
+#endif
 	c::IndIntruHeapData   prop_heap_data;
+#endif
+#ifdef CLOBBER_CHECK
+	char buff5[4] = { '\x0aa', '\x0aa', '\x0aa', '\x0aa' };
 #endif
 
       public:
