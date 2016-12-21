@@ -14,6 +14,7 @@
 #include <string>
 #include <iostream>
 #include <functional>
+#include <algorithm>
 
 #include "assert.h"
 
@@ -377,27 +378,30 @@ namespace crimson {
       return out;
     }
 
-    // can only be called if I is copyable
+    // can only be called if I is copyable; copies heap into a vector
+    // and sorts it before displaying it
     std::ostream&
     display_sorted(std::ostream& out,
 		   std::function<bool(const T&)> filter = all_filter) const {
       static_assert(std::is_copy_constructible<I>::value,
 		    "cannot call display_sorted when class I is not copy"
 		    " constructible");
+      auto compare = [&] (const I first, const I second) -> bool {
+	return comparator(*first, *second);
+      };
+      std::vector<I> copy;
+      for (auto c = data.begin(); c != data.end(); ++c) {
+	copy.push_back(*c);
+      }
+      std::sort(copy.begin(), copy.end(), compare);
 
-      IndIntruHeap<I,T,heap_info,C,K> copy = *this;
-
-      bool first = true;
-      while(!copy.empty()) {
-	const T& top = copy.top();
-	if (filter(top)) {
-	  if (!first) {
+      for (auto c = copy.begin(); c != copy.end(); ++c) {
+	if (filter(**c)) {
+	  if (c != copy.begin()) {
 	    out << ", ";
 	  }
-	  out << copy.top();
-	  first = false;
+	  out << **c;
 	}
-	copy.pop();
       }
 
       return out;
@@ -490,7 +494,7 @@ namespace crimson {
 	  break;
 	}
       }
-    } // sift_down    
+    } // sift_down
 
     // use this sift_down definition when K==2; EnableBool insures
     // template uses a template parameter
