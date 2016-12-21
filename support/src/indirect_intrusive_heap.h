@@ -18,8 +18,6 @@
 
 #include "assert.h"
 
-#define CHECK 1
-
 
 namespace crimson {
   using IndIntruHeapData = size_t;
@@ -210,9 +208,6 @@ namespace crimson {
       count(0)
     {
       // empty
-#if CHECK
-      check();
-#endif      
     }
 
     IndIntruHeap(const IndIntruHeap<I,T,heap_info,C,K>& other) :
@@ -221,9 +216,6 @@ namespace crimson {
       for (HeapIndex i = 0; i < other.count; ++i) {
 	data.push_back(other.data[i]);
       }
-#if CHECK
-      check();
-#endif
     }
 
     void check() {
@@ -245,16 +237,10 @@ namespace crimson {
     const I& top_ind() const { return data[0]; }
 
     void push(I&& item) {
-#if CHECK
-      check();
-#endif
       HeapIndex i = count++;
       intru_data_of(item) = i;
       data.emplace_back(std::move(item));
       sift_up(i);
-#if CHECK
-      check();
-#endif
     }
 
     void push(const I& item) {
@@ -267,14 +253,8 @@ namespace crimson {
     }
 
     void remove(Iterator& i) {
-#if CHECK
-      check();
-#endif
       remove(i.index);
       i = end();
-#if CHECK
-      check();
-#endif
     }
 
     Iterator find(const I& item) {
@@ -321,33 +301,15 @@ namespace crimson {
     }
 
     void promote(T& item) {
-#if CHECK
-      check();
-#endif
       sift_up(item.*heap_info);
-#if CHECK
-      check();
-#endif
     }
 
     void demote(T& item) {
-#if CHECK
-      check();
-#endif
       sift_down(item.*heap_info);
-#if CHECK
-      check();
-#endif
     }
 
     void adjust(T& item) {
-#if CHECK
-      check();
-#endif
       sift(item.*heap_info);
-#if CHECK
-      check();
-#endif
     }
 
     Iterator begin() {
@@ -410,25 +372,16 @@ namespace crimson {
 
   protected:
 
+
     static IndIntruHeapData& intru_data_of(I& item) {
       return (*item).*heap_info;
     }
 
     void remove(HeapIndex i) {
-#if CHECK
-      check();
-#endif
       std::swap(data[i], data[--count]);
       intru_data_of(data[i]) = i;
       data.pop_back();
-#if DO_FIX
       sift(i);
-#else
-      sift_down(i);
-#endif
-#if CHECK
-      check();
-#endif
     }
 
     // default value of filter parameter to display_sorted
@@ -535,29 +488,17 @@ namespace crimson {
     } // sift_down
 
     void sift(HeapIndex i) {
-#if CHECK
-	check();
-#endif
       if (i == 0) {
 	// if we're at top, can only go down
 	sift_down(i);
-#if CHECK
-	check();
-#endif
       } else {
 	HeapIndex pi = parent(i);
 	if (comparator(*data[i], *data[pi])) {
 	  // if we can go up, we will
 	  sift_up(i);
-#if CHECK
-	  check();
-#endif
 	} else {
 	  // otherwise we'll try to go down
 	  sift_down(i);
-#if CHECK
-	  check();
-#endif
 	}
       }
     } // sift
