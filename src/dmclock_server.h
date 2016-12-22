@@ -855,7 +855,8 @@ namespace crimson {
 #endif
 
 	client.add_request(tag, client.client, std::move(request));
-#if DO_FIX
+	// if a client now has one request, its ordering in the heap
+	// might need adjustment
 	if (1 == client.requests.size()) {
 	  // NB: can the following 4 calls to adjust be changed
 	  // promote? Can adding a request ever demote a client in the
@@ -867,7 +868,6 @@ namespace crimson {
 	  prop_heap.adjust(client);
 #endif
 	}
-#endif
 
 	client.cur_rho = req_params.rho;
 	client.cur_delta = req_params.delta;
