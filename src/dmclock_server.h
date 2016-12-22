@@ -1042,54 +1042,6 @@ namespace crimson {
 	}
 	if (limit_heap.top().has_request()) {
 	  const auto& next = limit_heap.top().next_request();
-#if 0 // TEMPORARY
-	  if (next.tag.ready && max_tag != next.tag.proportion) {
-	    const ClientRec** readys = new const ClientRec*[ready_heap.size()];
-	    const ClientReq** ready_reqs =
-	      new const ClientReq*[ready_heap.size()];
-	    int i = 0;
-	    for (auto c = ready_heap.cbegin();
-		 c != ready_heap.cend();
-		 ++i, ++c) {
-	      readys[i] = &(*c);
-	      ready_reqs[i] = nullptr;
-	      if (c->has_request()) ready_reqs[i] = &c->next_request();
-	    }
-
-	    const ClientRec** limits = new const ClientRec*[limit_heap.size()];
-	    const ClientReq** limit_reqs =
-	      new const ClientReq*[limit_heap.size()];
-	    i = 0;
-	    for (auto c = limit_heap.cbegin();
-		 c != limit_heap.cend();
-		 ++i, ++c) {
-	      limits[i] = &(*c);
-	      limit_reqs[i] = nullptr;
-	      if (c->has_request()) limit_reqs[i] = &c->next_request();
-	    }
-
-	    const ClientRec** resvs = new const ClientRec*[resv_heap.size()];
-	    const ClientReq** resv_reqs =
-	      new const ClientReq*[resv_heap.size()];
-	    i = 0;
-	    for (auto c = resv_heap.cbegin();
-		 c != resv_heap.cend();
-		 ++i, ++c) {
-	      resvs[i] = &(*c);
-	      resv_reqs[i] = nullptr;
-	      if (c->has_request()) resv_reqs[i] = &c->next_request();
-	    }
-
-	    assert(!next.tag.ready || max_tag == next.tag.proportion);
-
-	    delete[] resv_reqs;
-	    delete[] resvs;
-	    delete[] limit_reqs;
-	    delete[] limits;
-	    delete[] ready_reqs;
-	    delete[] readys;
-	  }
-#endif
 	  assert(!next.tag.ready || max_tag == next.tag.proportion);
 	  next_call = min_not_0_time(next_call, next.tag.limit);
 	}
