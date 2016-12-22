@@ -702,7 +702,7 @@ namespace crimson {
 
       std::atomic_bool finishing;
 
-#if ATOMIC_REQ_COUNT
+#ifdef ATOMIC_REQ_COUNT
       std::atomic<std::uint16_t> req_count;
 #endif
 
@@ -735,7 +735,7 @@ namespace crimson {
 	client_info_f(_client_info_f),
 	allow_limit_break(_allow_limit_break),
 	finishing(false),
-#if ATOMIC_REQ_COUNT
+#ifdef ATOMIC_REQ_COUNT
 	req_count(0),
 #endif
 	idle_age(std::chrono::duration_cast<Duration>(_idle_age)),
@@ -878,7 +878,7 @@ namespace crimson {
 #if USE_PROP_HEAP
 	prop_heap.adjust(client);
 #endif
-#if ATOMIC_REQ_COUNT
+#ifdef ATOMIC_REQ_COUNT
 	++req_count;
 #if DEBUG
 	std::cout << "[ IN queue_len:" << req_count << "]" << std::endl;
@@ -901,7 +901,7 @@ namespace crimson {
 	// pop request and adjust heaps
 	top.pop_request();
 
-#if ATOMIC_REQ_COUNT
+#ifdef ATOMIC_REQ_COUNT
 	--req_count;
 #endif
 
@@ -911,7 +911,7 @@ namespace crimson {
 	  " wgt:" << RequestTag::format_tag(first.tag.proportion) <<
 	  " lim:" << RequestTag::format_tag(first.tag.limit) <<
 	  " ]" << std::endl;
-#if ATOMIC_REQ_COUNT
+#ifdef ATOMIC_REQ_COUNT
 	std::cout << "[ OUT queue_len:" << req_count << "]" << std::endl;
 #endif
 #endif
