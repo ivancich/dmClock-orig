@@ -59,11 +59,6 @@
 #include <sstream>
 #endif
 
-#define CHECK 1
-
-#ifdef CHECK
-#warning indirect intrusive heap check turned on
-#endif
 
 namespace crimson {
 
@@ -773,10 +768,6 @@ namespace crimson {
 	// pointer, no matter which of two codepaths we take
 	ClientRec* temp_client;
 
-#if CHECK
-	ready_heap.check();
-#endif
-
 	auto client_it = client_map.find(client_id);
 	if (client_map.end() != client_it) {
 	  temp_client = &(*client_it->second); // address of obj of shared_ptr
@@ -796,10 +787,6 @@ namespace crimson {
 
 	// for convenience, we'll create a reference to the shared pointer
 	ClientRec& client = *temp_client;
-
-#if CHECK
-	ready_heap.check();
-#endif
 
 	if (client.idle) {
 	  // We need to do an adjustment so that idle clients compete
@@ -851,10 +838,6 @@ namespace crimson {
 	  client.idle = false;
 	} // if this client was idle
 
-#if CHECK
-	ready_heap.check();
-#endif
-
 #ifndef DO_NOT_DELAY_TAG_CALC
 	RequestTag tag(0, 0, 0, time);
 
@@ -869,10 +852,6 @@ namespace crimson {
 	RequestTag tag(client.get_req_tag(), client.info, req_params, time, cost);
 	// copy tag to previous tag for client
 	client.update_req_tag(tag, tick);
-#endif
-
-#if CHECK
-	ready_heap.check();
 #endif
 
 	client.add_request(tag, client.client, std::move(request));
@@ -893,10 +872,6 @@ namespace crimson {
 	client.cur_rho = req_params.rho;
 	client.cur_delta = req_params.delta;
 
-#if CHECK
-	ready_heap.check();
-#endif
-
 	resv_heap.adjust(client);
 	limit_heap.adjust(client);
 	ready_heap.adjust(client);
@@ -909,10 +884,6 @@ namespace crimson {
 	std::cout << "[ IN queue_len:" << req_count << "]" << std::endl;
 #endif
 #endif
-
-#if CHECK
-	ready_heap.check();
-#endif
       } // add_request
 
 
@@ -922,9 +893,6 @@ namespace crimson {
       void pop_process_request(IndIntruHeap<C1, ClientRec, C2, C3, B>& heap,
 			       std::function<void(const C& client,
 						  RequestRef& request)> process) {
-#if CHECK
-	ready_heap.check();
-#endif
 	// gain access to data
 	ClientRec& top = heap.top();
 	ClientReq& first = top.next_request();
@@ -932,9 +900,6 @@ namespace crimson {
 
 	// pop request and adjust heaps
 	top.pop_request();
-#if CHECK
-	ready_heap.check();
-#endif
 
 #if ATOMIC_REQ_COUNT
 	--req_count;
@@ -1005,9 +970,6 @@ namespace crimson {
 
       // data_mtx should be held when called
       NextReq do_next_request(Time now) {
-#if CHECK
-	ready_heap.check();
-#endif
 	NextReq result;
 
 	// if reservation queue is empty, all are empty (i.e., no active clients)
@@ -1018,27 +980,16 @@ namespace crimson {
 
 	// try constraint (reservation) based scheduling
 
-#if CHECK
-	ready_heap.check();
-#endif
-
 	auto& reserv = resv_heap.top();
 	if (reserv.has_request() &&
 	    reserv.next_request().tag.reservation <= now) {
 	  result.type = NextReqType::returning;
 	  result.heap_id = HeapId::reservation;
-#if CHECK
-	ready_heap.check();
-#endif
 	  return result;
 	}
 
 	// no existing reservations before now, so try weight-based
 	// scheduling
-
-#if CHECK
-	ready_heap.check();
-#endif
 
 	// all items that are within limit are eligible based on
 	// priority
@@ -1053,19 +1004,12 @@ namespace crimson {
 	  limits = &limit_heap.top();
 	}
 
-#if CHECK
-	ready_heap.check();
-#endif
-
 	auto& readys = ready_heap.top();
 	if (readys.has_request() &&
 	    readys.next_request().tag.ready &&
 	    readys.next_request().tag.proportion < max_tag) {
 	  result.type = NextReqType::returning;
 	  result.heap_id = HeapId::ready;
-#if CHECK
-	ready_heap.check();
-#endif
 	  return result;
 	}
 
@@ -1078,24 +1022,14 @@ namespace crimson {
 	      readys.next_request().tag.proportion < max_tag) {
 	    result.type = NextReqType::returning;
 	    result.heap_id = HeapId::ready;
-#if CHECK
-	ready_heap.check();
-#endif
 	    return result;
 	  } else if (reserv.has_request() &&
 		     reserv.next_request().tag.reservation < max_tag) {
 	    result.type = NextReqType::returning;
 	    result.heap_id = HeapId::reservation;
-#if CHECK
-	ready_heap.check();
-#endif
 	    return result;
 	  }
 	}
-
-#if CHECK
-	ready_heap.check();
-#endif
 
 	// nothing scheduled; make sure we re-run when next
 	// reservation item or next limited item comes up
@@ -1162,15 +1096,9 @@ namespace crimson {
 	if (next_call < TimeMax) {
 	  result.type = NextReqType::future;
 	  result.when_ready = next_call;
-#if CHECK
-	ready_heap.check();
-#endif
 	  return result;
 	} else {
 	  result.type = NextReqType::none;
-#if CHECK
-	ready_heap.check();
-#endif
 	  return result;
 	}
       } // do_next_request
@@ -1401,9 +1329,6 @@ namespace crimson {
 	pull_request_timer.start();
 #endif
 
-#if CHECK
-	this->ready_heap.check();
-#endif
 	typename super::NextReq next = super::do_next_request(now);
 	result.type = next.type;
 	switch(next.type) {
@@ -1434,9 +1359,6 @@ namespace crimson {
 	  };
 	};
 
-#if CHECK
-	this->ready_heap.check();
-#endif
 	switch(next.heap_id) {
 	case super::HeapId::reservation:
 	  super::pop_process_request(this->resv_heap,
@@ -1458,9 +1380,6 @@ namespace crimson {
 
 #ifdef PROFILE
 	pull_request_timer.stop();
-#endif
-#if CHECK
-	this->ready_heap.check();
 #endif
 	return result;
       } // pull_request
