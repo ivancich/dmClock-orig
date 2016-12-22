@@ -348,13 +348,10 @@ namespace crimson {
       static_assert(std::is_copy_constructible<I>::value,
 		    "cannot call display_sorted when class I is not copy"
 		    " constructible");
-      auto compare = [&] (const I first, const I second) -> bool {
-	return comparator(*first, *second);
+      auto compare = [this] (const I first, const I second) -> bool {
+	return this->comparator(*first, *second);
       };
-      std::vector<I> copy;
-      for (auto c = data.begin(); c != data.end(); ++c) {
-	copy.push_back(*c);
-      }
+      std::vector<I> copy(data);
       std::sort(copy.begin(), copy.end(), compare);
 
       for (auto c = copy.begin(); c != copy.end(); ++c) {
