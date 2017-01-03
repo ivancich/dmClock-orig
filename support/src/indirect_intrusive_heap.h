@@ -421,6 +421,12 @@ namespace crimson {
       std::swap(data[i], data[--count]);
       intru_data_of(data[i]) = i;
       data.pop_back();
+
+      // the following needs to be sift (and not sift_down) as it can
+      // go up or down the heap; imagine the heap vector contains 0,
+      // 10, 100, 20, 30, 200, 300, 40; then 200 is removed, and 40
+      // would have to be sifted upwards
+      // sift(i);
       sift(i);
     }
 
