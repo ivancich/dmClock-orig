@@ -277,6 +277,7 @@ namespace crimson {
 	C                     client;
 	RequestTag            prev_tag;
 	std::deque<ClientReq> requests;
+	double                popped_resv_inv;
 
 	// amount added from the proportion tag as a result of
 	// an idle client becoming unidle
@@ -302,6 +303,7 @@ namespace crimson {
 		  Counter current_tick) :
 	  client(_client),
 	  prev_tag(0.0, 0.0, 0.0, TimeZero),
+	  popped_resv_inv(0),
 	  info(_info),
 	  idle(true),
 	  last_tick(current_tick),
@@ -327,6 +329,14 @@ namespace crimson {
 	  assign_unpinned_tag(prev_tag.limit, _prev.limit);
 	  assign_unpinned_tag(prev_tag.proportion, _prev.proportion);
 	  last_tick = _tick;
+	}
+
+	inline double get_popped_resv_inv() const {
+	  return popped_resv_inv;
+	}
+
+	inline void set_popped_resv_inv(double resv_inv) {
+	  popped_resv_inv = resv_inv;
 	}
 
 	inline void add_request(const RequestTag& tag,
@@ -821,14 +831,23 @@ namespace crimson {
 	RequestTag tag(0, 0, 0, time);
 
 	if (!client.has_request()) {
-	  tag = RequestTag(client.get_req_tag(), client.info,
-			   req_params, time, cost);
+#ifndef DO_DYNAMIC_CLI_INFO_F
+	  ClientInfo info = client.info;
+#else
+	  ClientInfo info = client_info_f(client_id);
+#endif
+	  tag = RequestTag(client.get_req_tag(), info, req_params, time, cost);
 
 	  // copy tag to previous tag for client
 	  client.update_req_tag(tag, tick);
 	}
 #else
-	RequestTag tag(client.get_req_tag(), client.info, req_params, time, cost);
+#ifndef DO_DYNAMIC_CLI_INFO_F
+	ClientInfo info = client.info;
+#else
+	ClientInfo info = client_info_f(client_id);
+#endif
+	RequestTag tag(client.get_req_tag(), info, req_params, time, cost);
 	// copy tag to previous tag for client
 	client.update_req_tag(tag, tick);
 #endif
@@ -872,10 +891,21 @@ namespace crimson {
 	// pop request and adjust heaps
 	top.pop_request();
 
+#ifndef DO_DYNAMIC_CLI_INFO_F
+	top.set_popped_resv_inv(top.info.reservation_inv);
+#else
+	top.set_popped_resv_inv(0.0 == first.tag.reservation ? 0.0 : 1.0 / first.tag.reservation);
+#endif
+
 #ifndef DO_NOT_DELAY_TAG_CALC
 	if (top.has_request()) {
 	  ClientReq& next_first = top.next_request();
-	  next_first.tag = RequestTag(first.tag, top.info,
+#ifndef DO_DYNAMIC_CLI_INFO_F
+	  ClientInfo info = top.info;
+#else
+	  ClientInfo info = client_info_f(top.client);
+#endif
+	  next_first.tag = RequestTag(first.tag, info,
 	                              ReqParams(top.cur_delta, top.cur_rho),
 				      next_first.tag.arrival);
 
@@ -899,7 +929,7 @@ namespace crimson {
       // data_mtx should be held when called
       void reduce_reservation_tags(ClientRec& client) {
 	for (auto& r : client.requests) {
-	  r.tag.reservation -= client.info.reservation_inv;
+	  r.tag.reservation -= client.get_popped_resv_inv();
 
 #ifndef DO_NOT_DELAY_TAG_CALC
 	  // reduce only for front tag. because next tags' value are invalid
@@ -907,7 +937,7 @@ namespace crimson {
 #endif
 	}
 	// don't forget to update previous tag
-	client.prev_tag.reservation -= client.info.reservation_inv;
+	client.prev_tag.reservation -= client.get_popped_resv_inv();
 	resv_heap.promote(client);
       }
 
@@ -1083,6 +1113,24 @@ namespace crimson {
 #endif
 	delete_from_heap(client, limit_heap);
 	delete_from_heap(client, ready_heap);
+      }
+
+
+      // data_mtx must be held by caller
+      void do_update_client_info(const C& client_id) {
+	auto client_it = client_map.find(client_id);
+	if (client_map.end() != client_it) {
+	  ClientRec& client = (*client_it->second);
+	  client.info = client_info_f(client_id);
+	}
+      }
+
+
+      // data_mtx must be held by caller
+      void do_update_client_infos() {
+	for (auto i : client_map) {
+	  i.second->info = client_info_f(i.second->client);
+	}
       }
     }; // class PriorityQueueBase
 
@@ -1292,6 +1340,18 @@ namespace crimson {
       } // pull_request
 
 
+      void update_client_info(const C& client_id) {
+	typename super::DataGuard g(this->data_mtx);
+	super::do_update_client_info(client_id);
+      }
+
+
+      void update_client_info() {
+	typename super::DataGuard g(this->data_mtx);
+	super::do_update_client_infos();
+      }
+
+
     protected:
 
 
@@ -1451,6 +1511,18 @@ namespace crimson {
 #ifdef PROFILE
 	request_complete_timer.stop();
 #endif
+      }
+
+
+      void update_client_info(const C& client_id) {
+	typename super::DataGuard g(this->data_mtx);
+	super::do_update_client_info(client_id);
+      }
+
+
+      void update_client_info() {
+	typename super::DataGuard g(this->data_mtx);
+	super::do_update_client_infos();
       }
 
     protected:
