@@ -681,9 +681,15 @@ namespace crimson {
       pr = pq->pull_request(start_time + 0.5);
       EXPECT_EQ(Queue::NextReqType::returning, pr.type);
 
+      EXPECT_FALSE(pq->has_ready_request(start_time + 0.5)) <<
+	"too soon for ready request";
+
       pr = pq->pull_request(start_time + 0.5);
       EXPECT_EQ(Queue::NextReqType::future, pr.type) <<
 	"too soon for next reservation";
+
+      EXPECT_TRUE(pq->has_ready_request(start_time + 1.5)) <<
+	"should have ready request";
 
       pr = pq->pull_request(start_time + 1.5);
       EXPECT_EQ(Queue::NextReqType::returning, pr.type);

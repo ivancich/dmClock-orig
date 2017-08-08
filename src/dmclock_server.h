@@ -939,7 +939,7 @@ namespace crimson {
 
 
       // data_mtx should be held when called
-      NextReq do_next_request(Time now) {
+      NextReq do_next_request(Time now, bool allow_future = true) {
 	NextReq result;
 
 	// if reservation queue is empty, all are empty (i.e., no active clients)
@@ -999,6 +999,12 @@ namespace crimson {
 	    result.heap_id = HeapId::reservation;
 	    return result;
 	  }
+	}
+
+	// if we do not allow a future return, we can return none here
+	if (!allow_future) {
+	  result.type = NextReqType::none;
+	  return result;
 	}
 
 	// nothing scheduled; make sure we re-run when next
@@ -1160,6 +1166,18 @@ namespace crimson {
 			  _allow_limit_break)
       {
 	// empty
+      }
+
+
+      inline bool has_ready_request() {
+	return has_ready_request(get_time());
+      }
+
+      
+      inline bool has_ready_request(Time now) {
+	typename super::DataGuard g(this->data_mtx);
+	typename super::NextReq r = super::do_next_request(now, false);
+	return r.type == super::NextReqType::returning;
       }
 
 
