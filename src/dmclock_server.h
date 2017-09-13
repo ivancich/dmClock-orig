@@ -50,8 +50,6 @@
 #include "profile.h"
 #endif
 
-#include "gtest/gtest_prod.h"
-
 
 namespace crimson {
 
@@ -68,15 +66,15 @@ namespace crimson {
     constexpr uint tag_modulo = 1000000;
 
     struct ClientInfo {
-      const double reservation;  // minimum
-      const double weight;       // proportional
-      const double limit;        // maximum
+      double reservation;  // minimum
+      double weight;       // proportional
+      double limit;        // maximum
 
       // multiplicative inverses of above, which we use in calculations
       // and don't want to recalculate repeatedly
-      const double reservation_inv;
-      const double weight_inv;
-      const double limit_inv;
+      double reservation_inv;
+      double weight_inv;
+      double limit_inv;
 
       // order parameters -- min, "normal", max
       ClientInfo(double _reservation, double _weight, double _limit) :
@@ -231,11 +229,13 @@ namespace crimson {
     }; // class RequestTag
 
 
-    // C is client identifier type, R is request type, B is heap
-    // branching factor
-    template<typename C, typename R, uint B>
+    // C is client identifier type, R is request type,
+    // U1 determines whether to use client information function dynamically,
+    // B is heap branching factor
+    template<typename C, typename R, bool U1, uint B>
     class PriorityQueueBase {
-      FRIEND_TEST(dmclock_server, client_idle_erase);
+      // we don't want to include gtest.h just for FRIEND_TEST
+      friend class dmclock_server_client_idle_erase_Test;
 
     public:
 
@@ -286,7 +286,7 @@ namespace crimson {
       // ClientRec could be "protected" with no issue. [See comments
       // associated with function submit_top_request.]
       class ClientRec {
-	friend PriorityQueueBase<C,R,B>;
+	friend PriorityQueueBase<C,R,U1,B>;
 
 	C                     client;
 	RequestTag            prev_tag;
@@ -371,12 +371,12 @@ namespace crimson {
 
 	// NB: because a deque is the underlying structure, this
 	// operation might be expensive
-	bool remove_by_req_filter_fw(std::function<bool(const R&)> filter_accum) {
+	bool remove_by_req_filter_fw(std::function<bool(R&&)> filter_accum) {
 	  bool any_removed = false;
 	  for (auto i = requests.begin();
 	       i != requests.end();
 	       /* no inc */) {
-	    if (filter_accum(*i->request)) {
+	    if (filter_accum(std::move(*i->request))) {
 	      any_removed = true;
 	      i = requests.erase(i);
 	    } else {
@@ -388,12 +388,12 @@ namespace crimson {
 
 	// NB: because a deque is the underlying structure, this
 	// operation might be expensive
-	bool remove_by_req_filter_bw(std::function<bool(const R&)> filter_accum) {
+	bool remove_by_req_filter_bw(std::function<bool(R&&)> filter_accum) {
 	  bool any_removed = false;
 	  for (auto i = requests.rbegin();
 	       i != requests.rend();
 	       /* no inc */) {
-	    if (filter_accum(*i->request)) {
+	    if (filter_accum(std::move(*i->request))) {
 	      any_removed = true;
 	      i = decltype(i){ requests.erase(std::next(i).base()) };
 	    } else {
@@ -404,7 +404,7 @@ namespace crimson {
 	}
 
 	inline bool
-	remove_by_req_filter(std::function<bool(const R&)> filter_accum,
+	remove_by_req_filter(std::function<bool(R&&)> filter_accum,
 			     bool visit_backwards) {
 	  if (visit_backwards) {
 	    return remove_by_req_filter_bw(filter_accum);
@@ -415,7 +415,7 @@ namespace crimson {
 
 	friend std::ostream&
 	operator<<(std::ostream& out,
-		   const typename PriorityQueueBase<C,R,B>::ClientRec& e) {
+		   const typename PriorityQueueBase<C,R,U1,B>::ClientRec& e) {
 	  out << "{ ClientRec::" <<
 	    " client:" << e.client <<
 	    " prev_tag:" << e.prev_tag <<
@@ -478,7 +478,7 @@ namespace crimson {
       }
 
 
-      bool remove_by_req_filter(std::function<bool(const R&)> filter_accum,
+      bool remove_by_req_filter(std::function<bool(R&&)> filter_accum,
 				bool visit_backwards = false) {
 	bool any_removed = false;
 	DataGuard g(data_mtx);
@@ -500,14 +500,14 @@ namespace crimson {
 
 
       // use as a default value when no accumulator is provide
-      static void request_sink(const R& req) {
+      static void request_sink(R&& req) {
 	// do nothing
       }
 
 
       void remove_by_client(const C& client,
 			    bool reverse = false,
-			    std::function<void (const R&)> accum = request_sink) {
+			    std::function<void (R&&)> accum = request_sink) {
 	DataGuard g(data_mtx);
 
 	auto i = client_map.find(client);
@@ -518,13 +518,13 @@ namespace crimson {
 	  for (auto j = i->second->requests.rbegin();
 	       j != i->second->requests.rend();
 	       ++j) {
-	    accum(*j->request);
+	    accum(std::move(*j->request));
 	  }
 	} else {
 	  for (auto j = i->second->requests.begin();
 	       j != i->second->requests.end();
 	       ++j) {
-	    accum(*j->request);
+	    accum(std::move(*j->request));
 	  }
 	}
 
@@ -541,6 +541,24 @@ namespace crimson {
 
       uint get_heap_branching_factor() const {
 	return B;
+      }
+
+
+      void update_client_info(const C& client_id) {
+	DataGuard g(data_mtx);
+	auto client_it = client_map.find(client_id);
+	if (client_map.end() != client_it) {
+	  ClientRec& client = (*client_it->second);
+	  client.info = client_info_f(client_id);
+	}
+      }
+
+
+      void update_client_infos() {
+	DataGuard g(data_mtx);
+	for (auto i : client_map) {
+	  i.second->info = client_info_f(i.second->client);
+	}
       }
 
 
@@ -652,7 +670,8 @@ namespace crimson {
 	}
       };
 
-      ClientInfoFunc       client_info_f;
+      ClientInfoFunc        client_info_f;
+      static constexpr bool is_dynamic_cli_info_f = U1;
 
       mutable std::mutex data_mtx;
       using DataGuard = std::lock_guard<decltype(data_mtx)>;
@@ -745,6 +764,14 @@ namespace crimson {
       }
 
 
+      inline const ClientInfo get_cli_info(ClientRec& client) const {
+	if (is_dynamic_cli_info_f) {
+	  client.info = client_info_f(client.client);
+	}
+	return client.info;
+      }
+
+
       // data_mtx must be held by caller
       void do_add_request(RequestRef&& request,
 			  const C& client_id,
@@ -832,7 +859,7 @@ namespace crimson {
 
 	if (!client.has_request()) {
 	  tag = RequestTag(client.get_req_tag(),
-			   client.info,
+			   get_cli_info(client),
 			   req_params,
 			   time,
 			   cost);
@@ -841,7 +868,7 @@ namespace crimson {
 	  client.update_req_tag(tag, tick);
 	}
 #else
-	RequestTag tag(client.get_req_tag(), client.info, req_params, time, cost);
+	RequestTag tag(client.get_req_tag(), get_cli_info(client), req_params, time, cost);
 	// copy tag to previous tag for client
 	client.update_req_tag(tag, tick);
 #endif
@@ -881,7 +908,9 @@ namespace crimson {
 	ClientRec& top = heap.top();
 
 	RequestRef request = std::move(top.next_request().request);
+#ifndef DO_NOT_DELAY_TAG_CALC
 	RequestTag tag = top.next_request().tag;
+#endif
 
 	// pop request and adjust heaps
 	top.pop_request();
@@ -889,7 +918,7 @@ namespace crimson {
 #ifndef DO_NOT_DELAY_TAG_CALC
 	if (top.has_request()) {
 	  ClientReq& next_first = top.next_request();
-	  next_first.tag = RequestTag(tag, top.info,
+	  next_first.tag = RequestTag(tag, get_cli_info(top),
 				      top.cur_delta, top.cur_rho,
 				      next_first.tag.arrival);
 
@@ -1101,9 +1130,9 @@ namespace crimson {
     }; // class PriorityQueueBase
 
 
-    template<typename C, typename R, uint B=2>
-    class PullPriorityQueue : public PriorityQueueBase<C,R,B> {
-      using super = PriorityQueueBase<C,R,B>;
+    template<typename C, typename R, bool U1=false, uint B=2>
+    class PullPriorityQueue : public PriorityQueueBase<C,R,U1,B> {
+      using super = PriorityQueueBase<C,R,U1,B>;
 
     public:
 
@@ -1162,11 +1191,11 @@ namespace crimson {
       }
 
 
-      inline void add_request(const R& request,
+      inline void add_request(R&& request,
 			      const C& client_id,
 			      const ReqParams& req_params,
 			      double addl_cost = 0.0) {
-	add_request(typename super::RequestRef(new R(request)),
+	add_request(typename super::RequestRef(new R(std::move(request))),
 		    client_id,
 		    req_params,
 		    get_time(),
@@ -1174,11 +1203,11 @@ namespace crimson {
       }
 
 
-      inline void add_request(const R& request,
+      inline void add_request(R&& request,
 			      const C& client_id,
 			      double addl_cost = 0.0) {
 	static const ReqParams null_req_params;
-	add_request(typename super::RequestRef(new R(request)),
+	add_request(typename super::RequestRef(new R(std::move(request))),
 		    client_id,
 		    null_req_params,
 		    get_time(),
@@ -1187,12 +1216,12 @@ namespace crimson {
 
 
 
-      inline void add_request_time(const R& request,
+      inline void add_request_time(R&& request,
 				   const C& client_id,
 				   const ReqParams& req_params,
 				   const Time time,
 				   double addl_cost = 0.0) {
-	add_request(typename super::RequestRef(new R(request)),
+	add_request(typename super::RequestRef(new R(std::move(request))),
 		    client_id,
 		    req_params,
 		    time,
@@ -1255,11 +1284,9 @@ namespace crimson {
 	switch(next.type) {
 	case super::NextReqType::none:
 	  return result;
-	  break;
 	case super::NextReqType::future:
 	  result.data = next.when_ready;
 	  return result;
-	  break;
 	case super::NextReqType::returning:
 	  // to avoid nesting, break out and let code below handle this case
 	  break;
@@ -1319,12 +1346,12 @@ namespace crimson {
 
 
     // PUSH version
-    template<typename C, typename R, uint B=2>
-    class PushPriorityQueue : public PriorityQueueBase<C,R,B> {
+    template<typename C, typename R, bool U1=false, uint B=2>
+    class PushPriorityQueue : public PriorityQueueBase<C,R,U1,B> {
 
     protected:
 
-      using super = PriorityQueueBase<C,R,B>;
+      using super = PriorityQueueBase<C,R,U1,B>;
 
     public:
 
@@ -1402,11 +1429,11 @@ namespace crimson {
 
     public:
 
-      inline void add_request(const R& request,
+      inline void add_request(R&& request,
 			      const C& client_id,
 			      const ReqParams& req_params,
 			      double addl_cost = 0.0) {
-	add_request(typename super::RequestRef(new R(request)),
+	add_request(typename super::RequestRef(new R(std::move(request))),
 		    client_id,
 		    req_params,
 		    get_time(),
