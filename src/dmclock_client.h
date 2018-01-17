@@ -38,7 +38,7 @@ namespace crimson {
     public:
 
       OrigTracker(Counter global_delta,
-		 Counter global_rho) :
+		  Counter global_rho) :
 	delta_prev_req(global_delta),
 	rho_prev_req(global_rho),
 	my_delta(0),
@@ -61,12 +61,13 @@ namespace crimson {
 
       inline void resp_update(PhaseType phase,
 			      Counter& the_delta,
-			      Counter& the_rho) {
-	++the_delta;
-	++my_delta;
+			      Counter& the_rho,
+			      Counter cost) {
+	the_delta += cost;
+	my_delta += cost;
 	if (phase == PhaseType::reservation) {
-	  ++the_rho;
-	  ++my_rho;
+	  the_rho += cost;
+	  my_rho += cost;
 	}
       }
 
@@ -132,10 +133,11 @@ namespace crimson {
 
       inline void resp_update(PhaseType phase,
 			      Counter& the_delta,
-			      Counter& the_rho) {
-	++the_delta;
+			      Counter& the_rho,
+			      Counter cost) {
+	the_delta += cost;
 	if (phase == PhaseType::reservation) {
-	  ++the_rho;
+	  the_rho += cost;
 	}
       }
 
@@ -205,7 +207,9 @@ namespace crimson {
       /*
        * Incorporates the RespParams received into the various counter.
        */
-      void track_resp(const S& server_id, const PhaseType& phase) {
+      void track_resp(const S& server_id,
+		      const PhaseType& phase,
+		      Counter cost = 1) {
 	DataGuard g(data_mtx);
 
 	auto it = server_map.find(server_id);
@@ -217,7 +221,7 @@ namespace crimson {
 				      T::create(delta_counter, rho_counter));
 	  it = i.first;
 	}
-	it->second.resp_update(phase, delta_counter, rho_counter);
+	it->second.resp_update(phase, delta_counter, rho_counter, cost);
       }
 
       /*
